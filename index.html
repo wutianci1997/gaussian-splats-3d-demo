@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script type="text/javascript" src="js/util.js"></script>
+    <script type="text/javascript" src="./lib/deck.gl.min.js"></script>
+    <script type="text/javascript" src="./lib/maplibre-gl.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./lib/three.module.js",
+          "@mkkellogg/gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js",
+          "math.gl": "./lib/@math.gl/core/dist/index.js"
+        }
+      }
+    </script>
+    <link href="./css/maplibre-gl.css" rel="stylesheet" />
+    <style>
+      body {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import * as GaussianSplats3D from "@mkkellogg/gaussian-splats-3d";
+      import * as THREE from "three";
+      import { Matrix4 } from "math.gl";
+
+      const { DeckGL, Layer, COORDINATE_SYSTEM } = deck;
+
+      class ThreeGaussianLayer extends Layer {
+        initializeState(context) {
+          const scene = new THREE.Scene();
+          const camera = new THREE.PerspectiveCamera(
+            65,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            500
+          );
+          const renderer = new THREE.WebGLRenderer({
+            context: context.gl,
+            canvas: context.gl.canvas,
+            ...context.gl.getContextAttributes(),
+          });
+          const viewer = new GaussianSplats3D.DropInViewer();
+          viewer.addSplatScenes(
+            [
+              {
+                path: "assets/bonsai.ksplat",
+                splatAlphaRemovalThreshold: 20,
+              },
+            ],
+            true
+          );
+          scene.add(viewer);
+          this.setState({ scene, camera, renderer });
+        }
+        draw() {
+          const viewport = this.context.viewport;
+
+          const position = viewport.projectPosition([120.09665, 31.43066, 0]);
+          const scales = viewport.getDistanceScales([120.09665, 31.43066, 0]);
+          const modelMatrix = new Matrix4()
+            .translate(position)
+            .scale(scales.unitsPerMeter);
+
+          const viewProjectMatrix = new Matrix4(viewport.viewProjectionMatrix);
+          const mvpMatrix = viewProjectMatrix.multiplyRight(modelMatrix);
+
+          const { camera, renderer, scene } = this.state;
+          camera.projectionMatrix = new THREE.Matrix4().fromArray(mvpMatrix);
+          renderer.resetState();
+          renderer.render(scene, camera);
+        }
+      }
+
+      ThreeGaussianLayer.layerName = "three-gaussian-layer";
+
+      new DeckGL({
+        mapStyle:
+          "https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json",
+        initialViewState: {
+          longitude: 120.09665,
+          latitude: 31.43066,
+          zoom: 15,
+        },
+        controller: true,
+        layers: [
+          new ThreeGaussianLayer({
+            id: "three-layer",
+            coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          }),
+        ],
+      });
+    </script>
+  </body>
+</html>
